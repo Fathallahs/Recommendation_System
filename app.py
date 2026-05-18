@@ -15,12 +15,12 @@ def load_data():
         movies = pickle.load(f)
     with open('ratings.pkl', 'rb') as f:
         ratings = pickle.load(f)
-    with open('svd_model.pkl', 'rb') as f:
-        svd_model = pickle.load(f)
-    return movies, ratings, svd_model
+    with open('cf_scores.pkl', 'rb') as f:
+        cf_scores_dict = pickle.load(f)
+    return movies, ratings, cf_scores_dict
 
 try:
-    movies, ratings, svd_model = load_data()
+    movies, ratings, cf_scores_dict = load_data()
     st.success("Models and data loaded successfully!")
 except FileNotFoundError:
     st.error("Model files not found! Please run the Jupyter Notebook first to generate the .pkl files.")
@@ -53,10 +53,10 @@ def get_hybrid_recommendations(user_id, weight_cb, weight_cf, top_n=10):
             similarities = similarities / similarities.max()
 
     # --- Collaborative Filtering (CF) ---
-    test_set = [(user_id, mid, 0) for mid in movies["movie_id"]]
-    expected_ratings = svd_model.test(test_set)
-    expected_ratings_pred = np.array([pred.est for pred in expected_ratings])
-    cf_scores = expected_ratings_pred / 5.0 # Normalize 1-5 to 0-1
+    # Load the pre-computed normalized expected ratings for this user
+    user_cf_scores_dict = cf_scores_dict.get(user_id, {})
+    # Map the scores to the same order as movies DataFrame
+    cf_scores = np.array([user_cf_scores_dict.get(mid, 3.0 / 5.0) for mid in movies["movie_id"]])
 
     # --- Hybrid combination ---
     final_scores = (weight_cb * similarities) + (weight_cf * cf_scores)
