@@ -5,10 +5,9 @@ import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-st.title("🎬 Simple Hybrid Movie Recommender")
+st.title("Hybrid Movie Recommender")
 st.write("This application combines Content-Based Filtering (Movie Genres) and Collaborative Filtering (User Ratings) to recommend movies.")
 
-# 1. Load Data and Models
 @st.cache_resource
 def load_data():
     with open('movies.pkl', 'rb') as f:
@@ -26,13 +25,12 @@ except FileNotFoundError:
     st.error("Model files not found! Please run the Jupyter Notebook first to generate the .pkl files.")
     st.stop()
 
-# 2. Define the Hybrid Function
 genres_list = ["Action", "Adventure", "Animation", "Children", "Comedy", "Crime", 
                "Documentary", "Drama", "Fantasy", "FilmNoir", "Horror", "Musical", 
                "Mystery", "Romance", "SciFi", "Thriller", "War", "Western"]
 
 def get_hybrid_recommendations(user_id, weight_cb, weight_cf, top_n=10):
-    # --- Content-Based (CB) ---
+    # content based
     movies['genres_str'] = movies[genres_list].apply(lambda row: ' '.join(row.index[row == 1]), axis=1)
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(movies['genres_str'])
@@ -52,29 +50,26 @@ def get_hybrid_recommendations(user_id, weight_cb, weight_cf, top_n=10):
         if similarities.max() > 0:
             similarities = similarities / similarities.max()
 
-    # --- Collaborative Filtering (CF) ---
-    # Load the pre-computed normalized expected ratings for this user
+    # collaborative
     user_cf_scores_dict = cf_scores_dict.get(user_id, {})
-    # Map the scores to the same order as movies DataFrame
     cf_scores = np.array([user_cf_scores_dict.get(mid, 3.0 / 5.0) for mid in movies["movie_id"]])
 
-    # --- Hybrid combination ---
     final_scores = (weight_cb * similarities) + (weight_cf * cf_scores)
 
-    # Format output
     result_df = pd.DataFrame({
         "movie_id": movies["movie_id"],
         "title": movies["title"],
+            "collaborative_score (rating)": cf_scores,
+        "content_based_score": similarities,
         "score": final_scores
     })
     
-    # Remove already watched movies
+    # remove already watched movies
     watched = ratings[ratings["user_id"] == user_id]["movie_id"].values
     result_df = result_df[~result_df["movie_id"].isin(watched)]
     
     return result_df.sort_values(by="score", ascending=False).head(top_n)
 
-# 3. User Inputs
 st.sidebar.header("Settings")
 user_list = sorted(ratings['user_id'].unique())
 selected_user = st.sidebar.selectbox("Select User ID", user_list)
@@ -86,12 +81,10 @@ st.sidebar.write(f"Content-Based Weight: **{weight_cb:.1f}**")
 
 num_recs = st.sidebar.slider("Number of Recommendations", 5, 20, 10)
 
-# 4. Display Recommendations
 if st.button("Show Recommendations"):
     st.subheader(f"Top {num_recs} Recommendations for User {selected_user}")
     
     with st.spinner("Calculating recommendations..."):
         recommendations = get_hybrid_recommendations(selected_user, weight_cb, weight_cf, num_recs)
         
-        # Display as a clean table
         st.table(recommendations[['title', 'score']].reset_index(drop=True))
