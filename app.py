@@ -87,4 +87,4 @@ if st.button("Show Recommendations"):
     with st.spinner("Calculating recommendations..."):
         recommendations = get_hybrid_recommendations(selected_user, weight_cb, weight_cf, num_recs)
         
-        st.table(recommendations[['title', 'score']].reset_index(drop=True))
+        st.table(recommendations[["title", "collaborative_score (rating)", "content_based_score", "score"]].reset_index(drop=True))
